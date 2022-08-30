@@ -1,21 +1,11 @@
-# OpenVPN for Docker
+# OpenVPN for Docker with Duo Security (Two-Factor Authentication & Data Protection)
 
-[![Build Status](https://travis-ci.org/kylemanna/docker-openvpn.svg)](https://travis-ci.org/kylemanna/docker-openvpn)
-[![Docker Stars](https://img.shields.io/docker/stars/kylemanna/openvpn.svg)](https://hub.docker.com/r/kylemanna/openvpn/)
-[![Docker Pulls](https://img.shields.io/docker/pulls/kylemanna/openvpn.svg)](https://hub.docker.com/r/kylemanna/openvpn/)
-[![ImageLayers](https://images.microbadger.com/badges/image/kylemanna/openvpn.svg)](https://microbadger.com/#/images/kylemanna/openvpn)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkylemanna%2Fdocker-openvpn.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkylemanna%2Fdocker-openvpn?ref=badge_shield)
-
-
-OpenVPN server in a Docker container complete with an EasyRSA PKI CA.
-
-Extensively tested on [Digital Ocean $5/mo node](http://bit.ly/1C7cKr3) and has
-a corresponding [Digital Ocean Community Tutorial](http://bit.ly/1AGUZkq).
+OpenVPN server in a Docker container complete with an EasyRSA PKI CA and Duo Security (Two-Factor Authentication & Data Protection)
 
 #### Upstream Links
 
-* Docker Registry @ [kylemanna/openvpn](https://hub.docker.com/r/kylemanna/openvpn/)
-* GitHub @ [kylemanna/docker-openvpn](https://github.com/kylemanna/docker-openvpn)
+* Docker Registry @ [darkobg/openvpn](https://hub.docker.com/darkobg/openvpn/)
+* GitHub @ [darkobg79/docker-openvpn](https://github.com/darkobg79/docker-openvpn)
 
 ## Quick Start
 
@@ -31,20 +21,84 @@ a corresponding [Digital Ocean Community Tutorial](http://bit.ly/1AGUZkq).
   private key used by the newly generated certificate authority.
 
       docker volume create --name $OVPN_DATA
-      docker run -v $OVPN_DATA:/etc/openvpn --rm kylemanna/openvpn ovpn_genconfig -u udp://VPN.SERVERNAME.COM
-      docker run -v $OVPN_DATA:/etc/openvpn --rm -it kylemanna/openvpn ovpn_initpki
+      docker run -v $OVPN_DATA:/etc/openvpn --rm darkobg/openvpn ovpn_genconfig -u udp://VPN.SERVERNAME.COM
+      docker run -v $OVPN_DATA:/etc/openvpn --rm -it darkobg/openvpn ovpn_initpki
 
 * Start OpenVPN server process
 
-      docker run -v $OVPN_DATA:/etc/openvpn -d -p 1194:1194/udp --cap-add=NET_ADMIN kylemanna/openvpn
+      docker run -v $OVPN_DATA:/etc/openvpn -d -p 1194:1194/udp --cap-add=NET_ADMIN darkobg/openvpn
 
 * Generate a client certificate without a passphrase
 
-      docker run -v $OVPN_DATA:/etc/openvpn --rm -it kylemanna/openvpn easyrsa build-client-full CLIENTNAME nopass
+      docker run -v $OVPN_DATA:/etc/openvpn --rm -it darkobg/openvpn easyrsa build-client-full CLIENTNAME nopass
 
 * Retrieve the client configuration with embedded certificates
 
-      docker run -v $OVPN_DATA:/etc/openvpn --rm kylemanna/openvpn ovpn_getclient CLIENTNAME > CLIENTNAME.ovpn
+      docker run -v $OVPN_DATA:/etc/openvpn --rm darkobg/openvpn ovpn_getclient CLIENTNAME > CLIENTNAME.ovpn
+
+## Docker compose
+
+    ###########
+    ##OpenVPN##
+    ###########
+
+    #OpenVPN VPN Container (UDP)
+    openvpn-udp:
+      image: darkobg/openvpn:latest
+      container_name: ovpn-udp
+      cap_add:
+        - NET_ADMIN
+      command: ovpn_run --proto udp
+      sysctls:
+        - net.ipv6.conf.all.disable_ipv6=0
+        - net.ipv6.conf.all.forwarding=1
+        - net.ipv6.conf.default.forwarding=1
+      healthcheck:
+        interval: 30s
+        timeout: 10s
+        retries: 3
+      environment:
+        - TZ=$TZ
+        - DEBUG=0
+        - HEALTH_CHECK_HOST=VPN.SERVERNAME.COM
+      volumes:
+        - $OVPN_DATA/config:/etc/openvpn
+        - $OVPN_DATA/log:/logs
+      restart: always
+
+
+## INSTALL.SH
+Copy, paste and execute 
+
+    #!/bin/bash
+
+    ################
+    # ENV SETUP    #
+    ################
+
+    CLIENT_NAME=clientname    (eg. Tom)
+    OPENVPN_DATA=SOMELOCATION (eg. /home/user/...)
+    VPN_SERVER_NAME=udp://VPN.SERVERNAME.COM
+    DUO_IKEY=xxxxxxxxxx
+    DUO_SKEY=xxxxxxxxxx
+    DUO_HOST=xxx.duosecurity.com
+
+    ################
+
+    # System setting
+    docker run -v $OPENVPN_DATA/config:/etc/openvpn --rm -e DUO_IKEY=$DUO_IKEY -e DUO_SKEY=$DUO_SKEY -e DUO_HOST=$DUO_HOST darkobg/openvpn ovpn_genconfig -u $VPN_SERVER_NAME -2
+
+    # Init setup
+    docker run -v $OPENVPN_DATA/config:/etc/openvpn --rm -it darkobg/openvpn ovpn_initpki
+
+    # Generate a client certificate
+    docker run -v $OPENVPN_DATA/config:/etc/openvpn --rm -it darkobg/openvpn easyrsa build-client-full $CLIENT_NAME
+
+    # Copy cerficate in .ovpn file
+    docker run -v $OPENVPN_DATA/config:/etc/openvpn --rm darkobg/openvpn ovpn_getclient_all
+
+    sudo chown -R $(whoami): $OPENVPN_DATA
+
 
 ## Next Steps
 
@@ -69,7 +123,7 @@ If you prefer to use `docker-compose` please refer to the [documentation](docs/d
 
 * Create an environment variable with the name DEBUG and value of 1 to enable debug output (using "docker -e").
 
-        docker run -v $OVPN_DATA:/etc/openvpn -p 1194:1194/udp --cap-add=NET_ADMIN -e DEBUG=1 kylemanna/openvpn
+        docker run -v $OVPN_DATA:/etc/openvpn -p 1194:1194/udp --cap-add=NET_ADMIN -e DEBUG=1 darkobg/openvpn
 
 * Test using a client that has openvpn installed correctly
 
@@ -87,7 +141,7 @@ If you prefer to use `docker-compose` please refer to the [documentation](docs/d
 
 ## How Does It Work?
 
-Initialize the volume container using the `kylemanna/openvpn` image with the
+Initialize the volume container using the `darkobg/openvpn` image with the
 included scripts to automatically generate:
 
 - Diffie-Hellman parameters
@@ -195,16 +249,13 @@ of a guarantee in the future.
   volume for re-use across containers
 * Addition of tls-auth for HMAC security
 
-## Originally Tested On
+## Differences from kylemanna/openvpn
 
-* Docker hosts:
-  * server a [Digital Ocean](https://www.digitalocean.com/?refcode=d19f7fe88c94) Droplet with 512 MB RAM running Ubuntu 14.04
-* Clients
-  * Android App OpenVPN Connect 1.1.14 (built 56)
-     * OpenVPN core 3.0 android armv7a thumb2 32-bit
-  * OS X Mavericks with Tunnelblick 3.4beta26 (build 3828) using openvpn-2.3.4
-  * ArchLinux OpenVPN pkg 2.3.4-1
+* Added Duo Security - Two-Factor Authentication & Data Protection
+* Healtchecks
+* Time zone
+* Added LOGS volume
 
+## Credit
 
-## License
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fkylemanna%2Fdocker-openvpn.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fkylemanna%2Fdocker-openvpn?ref=badge_large)
+* https://github.com/kylemanna/docker-openvpn

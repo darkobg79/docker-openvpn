@@ -50,7 +50,7 @@ function setupIptablesAndRouting {
 }
 
 
-addArg "--config" "$OPENVPN/openvpn.conf"
+addArg "--config" "$OPENVPN/openvpn.conf "
 
 source "$OPENVPN/ovpn_env.sh"
 

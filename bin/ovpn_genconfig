@@ -91,7 +91,7 @@ usage() {
     echo "                 [-s SERVER_SUBNET]"
     echo
     echo "optional arguments:"
-    echo " -2    Enable two factor authentication using Google Authenticator."
+    echo " -2    Enable two factor authentication using Duo Security."
     echo " -a    Authenticate  packets with HMAC using the given message digest algorithm (auth)."
     echo " -b    Disable 'push block-outside-dns'"
     echo " -c    Enable client-to-client option"
@@ -248,7 +248,7 @@ while getopts ":a:e:E:C:T:r:s:du:bcp:n:k:DNm:f:tz2" opt; do
             OVPN_COMP_LZO=1
             ;;
         2)
-            OVPN_OTP_AUTH=1
+            OVPN_DUO_AUTH=1
             ;;
         f)
             OVPN_FRAGMENT="$OPTARG"
@@ -334,10 +334,9 @@ proto $OVPN_PROTO
 # Rely on Docker to do port mapping, internally always 1194
 port 1194
 dev $OVPN_DEVICE$OVPN_DEVICEN
-status /tmp/openvpn-status.log
+status /logs/openvpn-status.log
+log /logs/openvpn.log
 
-user nobody
-group nogroup
 EOF
 
 if [ "${OVPN_DISABLE_PUSH_BLOCK_DNS}" == "1" ]; then
@@ -381,11 +380,14 @@ done
 echo -e "\n### Push Configurations Below" >> "$conf"
 cat $TMP_PUSH_CONFIGFILE >> "$conf"
 
-# Append optional OTP authentication support
-if [ -n "${OVPN_OTP_AUTH:-}" ]; then
-    echo -e "\n\n# Enable OTP+PAM for user authentication" >> "$conf"
-    echo "plugin /usr/lib/openvpn/plugins/openvpn-plugin-auth-pam.so openvpn" >> "$conf"
+# Append optional DUO authentication support
+if [ -n "${OVPN_DUO_AUTH:-}" ]; then
+    echo -e "\n\n# Enable DUO for user authentication" >> "$conf"
+    echo "plugin /opt/duo/duo_openvpn.so '$DUO_IKEY $DUO_SKEY $DUO_HOST'" >> "$conf"
     echo "reneg-sec 0" >> "$conf"
+else
+    echo "user nobody" >> "$conf"
+    echo "group nogroup" >> "$conf"
 fi
 
 # Append extra server configurations

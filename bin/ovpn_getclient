@@ -92,16 +92,16 @@ tls-auth ta.key 1
         echo "auth $OVPN_AUTH"
     fi
 
-    if [ -n "$OVPN_OTP_AUTH" ]; then
+    if [ -n "$OVPN_DUO_AUTH" ]; then
         echo "auth-user-pass"
-        echo "auth-nocache"
+        echo "auth-retry interact"
     fi
 
     if [ "$OVPN_COMP_LZO" == "1" ]; then
         echo "comp-lzo"
     fi
 
-    if [ -n "$OVPN_OTP_AUTH" ]; then
+    if [ -n "$OVPN_DUO_AUTH" ]; then
         echo reneg-sec 0
     fi
 }
